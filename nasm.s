@@ -1,41 +1,38 @@
 section     .text
 
 global _start
+global _my_printf
 
 ; =======================================================================
-; MAIN OF PROGRAMM
+; Обертка для принта
 ; =======================================================================
-_start:     
-                push 128398
-                push 13
-                push 0938782
-                push String1
-                push 'a'
-                push Argument
+_my_printf:     
+                mov r15, rsp
+
+                push r9
+                push r8
+                push rcx
+                push rdx
+                push rsi
+                push rdi
+                
+                push rbx
+                push r12
+                push r13
+                push r14
+                push r15
 
                 call _printf
 
-                jmp _end
-; =======================================================================
+                pop r15
+                pop r14
+                pop r13
+                pop r12
+                pop rbx
 
 
-
-
-
-; =======================================================================
-; EXIT PROGRAMM
-; =======================================================================
-_end:
-                mov rax, 0x01
-                mov rdi, 1
-                mov rsi, EndSymbol
-                mov rdx, 1
-                syscall
-
-
-                mov rax, 0x3C
-                xor rdi, rdi
-                syscall
+                mov rsp, r15
+                ret
 ; =======================================================================
 
 
@@ -48,8 +45,11 @@ _end:
 ; C-LIKE PRINTF FUNCTION
 ; =======================================================================
 _printf:
-                pop r8                  ; извлекаем адрес возврата
-                pop rbx
+                mov r14, rsp
+                add r14, 48
+
+                mov rbx, [r14]
+                add r14, 8
 
                 xor rcx, rcx 
 
@@ -73,7 +73,6 @@ _printf:
 
 
 .done:
-                push r8                 ; возвращаем адрес возврата
                 ret
 ; =======================================================================
 
@@ -87,37 +86,26 @@ _printf:
 ; Proc to parse percentage agruments
 ; =======================================================================
 _parse_percent:
-                pop r9
-
                 inc rcx
 
                 mov al, [rbx + rcx]
+                sub al, 'b'
 
-                cmp al, 'c'               
-                je .char
+                cmp al, 17
+                ja .back
 
-                cmp al, 's'               
-                je .string
-
-                cmp al, 'h'               
-                je .hex
-
-                cmp al, 'b'               
-                je .bin
-
-                cmp al, 'd'               
-                je .decimal
+                movzx eax, al
+                jmp [.jump_table + 8 * rax]
 .back:
                 inc rcx
 
-                push r9
                 ret
 
 
 
-
 .char:
-                pop rax
+                mov rax, [r14]
+                add r14, 8
 
                 mov [Symbol], al
                 call _print_symbol
@@ -125,7 +113,8 @@ _parse_percent:
                 jmp .back
 
 .hex:
-                pop rax
+                mov rax, [r14]
+                add r14, 8
 
 
                 mov r10, 16
@@ -188,7 +177,8 @@ _parse_percent:
                 jmp .back
 
 .bin:
-                pop rax
+                mov rax, [r14]
+                add r14, 8
 
 
                 mov r10, 64
@@ -252,7 +242,8 @@ _parse_percent:
                 jmp .back
 
 .decimal:
-                pop rax
+                mov rax, [r14]
+                add r14, 8
 
 
                 mov r10, 32
@@ -315,7 +306,8 @@ _parse_percent:
 
 
 .string:
-                pop rdx
+                mov rdx, [r14]
+                add r14, 8
 
                 push rcx
                 push rax
@@ -343,7 +335,25 @@ _parse_percent:
 
                 jmp .back
 
-
+.jump_table:
+                dq .bin          
+                dq .char         
+                dq .decimal      
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .hex          
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .back         
+                dq .string   
 ; =======================================================================
 
 
@@ -365,6 +375,7 @@ _print_symbol:
                 mov rsi, Symbol
                 mov rdx, 1
                 syscall
+
 
                 pop rcx
                 pop rdx
@@ -409,6 +420,7 @@ EndSymbol       db 0x0a
 Numbers         db '0123456789ABCDEF'
 Buffer          resb 64
 
-Argument        db "vovk%c golovka %s %h %b %d", 0x00
+Argument        db "bebra", 0x00
 String1         db "Megaknight", 0x00
 String2         db "Clash royal", 0x00
+
