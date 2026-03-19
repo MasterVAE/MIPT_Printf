@@ -6,9 +6,9 @@ global _start
 ; MAIN OF PROGRAMM
 ; =======================================================================
 _start:     
-
+                push 128398
                 push 13
-                push 13
+                push 0938782
                 push String1
                 push 'a'
                 push Argument
@@ -101,7 +101,7 @@ _parse_percent:
 
                 cmp al, 'h'               
                 je .hex
-                
+
                 cmp al, 'b'               
                 je .bin
 
@@ -160,6 +160,19 @@ _parse_percent:
 
 
                 mov r10, 16
+        .hex_zero_loop:                 ; выкидыш старших нулей
+                mov r11, 64 + Buffer
+                sub r11, r10
+
+                mov dl, [r11]
+
+                cmp dl, '0'
+                jne .hex_print_loop
+
+                dec r10
+                cmp r10, 1
+                jne .hex_zero_loop
+
         .hex_print_loop:                ; печать буффера
                 mov r11, 64 + Buffer
                 sub r11, r10
@@ -210,6 +223,20 @@ _parse_percent:
 
 
                 mov r10, 64
+        .bin_zero_loop:                 ; выкидыш старших нулей
+                mov r11, 64 + Buffer
+                sub r11, r10
+
+                mov dl, [r11]
+
+                cmp dl, '0'
+                jne .bin_print_loop
+
+                dec r10
+                cmp r10, 1
+                jne .bin_zero_loop
+
+
         .bin_print_loop:                ; печать буффера
                 mov r11, 64 + Buffer
                 sub r11, r10
@@ -225,7 +252,66 @@ _parse_percent:
                 jmp .back
 
 .decimal:
+                pop rax
+
+
+                mov r10, 32
+        .dec_clean_loop:                ; очистка буффера чисел
+                mov r11, 64 + Buffer
+                sub r11, r10
+                mov byte [r11], 0                
+
+                dec r10
+                cmp r10, 0
+                jne .dec_clean_loop
+
+
+                mov r10, 0
+        .dec_loop:                ; запись числа в буффер
+
+                mov rsi, 10
+                xor rdx, rdx
+                div rsi
+
+                mov r11, 63 + Buffer
+                sub r11, r10
+                mov sil, byte [Numbers + rdx]       
+                mov byte [r11], sil   
+
+                inc r10
+                cmp r10, 32
+                jne .dec_loop
+
+
+
+                mov r10, 32
+        .dec_zero_loop:                 ; выкидыш старших нулей
+                mov r11, 64 + Buffer
+                sub r11, r10
+
+                mov dl, [r11]
+
+                cmp dl, '0'
+                jne .dec_print_loop
+
+                dec r10
+                cmp r10, 1
+                jne .dec_zero_loop
+
+        .dec_print_loop:                ; печать буффера
+                mov r11, 64 + Buffer
+                sub r11, r10
+
+                mov dl, [r11]
+                mov [Symbol], dl
+                call _print_symbol
+
+                dec r10
+                cmp r10, 0
+                jne .dec_print_loop
+
                 jmp .back
+
 
 
 .string:
@@ -323,6 +409,6 @@ EndSymbol       db 0x0a
 Numbers         db '0123456789ABCDEF'
 Buffer          resb 64
 
-Argument        db "vovk%c golovka %s %h %b", 0x00
+Argument        db "vovk%c golovka %s %h %b %d", 0x00
 String1         db "Megaknight", 0x00
 String2         db "Clash royal", 0x00
