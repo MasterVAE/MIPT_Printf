@@ -1,7 +1,18 @@
+DEFAULT REL
+
 section     .text
 
 global _start
 global _my_printf
+
+END_SYMBOL equ 0x00
+PERSENT_SYMBOL equ '%'
+REG_SIZE equ 8
+MINUS_SYMBOL equ '-'
+BUFFER_SIZE equ 64d
+
+FIRST_LETTER equ 'a'
+LAST_LETTER equ 's'
 
 ; =======================================================================
 ; Обертка для принта
@@ -15,7 +26,6 @@ _my_printf:
                 push rdx
                 push rsi
                 push rdi
-                
                 push rbx
                 push r12
                 push r13
@@ -43,10 +53,11 @@ _my_printf:
 
 ; =======================================================================
 ; C-LIKE PRINTF FUNCTION
+; Destroy :
 ; =======================================================================
 _printf:
                 mov r14, rsp
-                add r14, 48
+                add r14, 6 * REG_SIZE 
 
                 mov rbx, [r14]
                 add r14, 8
@@ -55,10 +66,10 @@ _printf:
 
 .cycle:
                 mov al, [rbx + rcx]
-                cmp al, 0x00               
+                cmp al, END_SYMBOL        
                 je .done
 
-                cmp al, '%'
+                cmp al, PERSENT_SYMBOL
                 je .percent
             
                 mov [Symbol], al
@@ -73,6 +84,7 @@ _printf:
 
 
 .done:
+                call _print_buffer
                 ret
 ; =======================================================================
 
@@ -89,13 +101,13 @@ _parse_percent:
                 inc rcx
 
                 mov al, [rbx + rcx]
-                sub al, 'b'
+                sub al, FIRST_LETTER 
 
-                cmp al, 17
+                cmp al, LAST_LETTER - FIRST_LETTER
                 ja .back
 
                 movzx eax, al
-                jmp [.jump_table + 8 * rax]
+                jmp [.jump_table + REG_SIZE * rax]
 .back:
                 inc rcx
 
@@ -117,9 +129,23 @@ _parse_percent:
                 add r14, 8
 
 
-                mov r10, 16
+                                        ; проверка минуса
+                mov r10, rax
+                shr r10, 4 * REG_SIZE - 1
+                cmp r10, 0
+                je .hex_plus
+                
+                mov r10, rax
+                xor rax, rax
+                sub rax, r10
+                mov [Symbol], MINUS_SYMBOL
+                call _print_symbol
+
+        .hex_plus:
+
+                mov r10, 8
         .hex_clean_loop:                ; очистка буффера чисел
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
                 mov byte [r11], 0                
 
@@ -135,7 +161,7 @@ _parse_percent:
                 and sil, al
 
 
-                mov r11, 63 + Buffer
+                mov r11, 63 + Num_buffer
                 sub r11, r10
                 mov sil, byte [Numbers + rsi]       
                 mov byte [r11], sil   
@@ -143,14 +169,14 @@ _parse_percent:
                 shr rax, 4
 
                 inc r10
-                cmp r10, 16
+                cmp r10, 8
                 jne .hex_loop
 
 
 
-                mov r10, 16
+                mov r10, 8
         .hex_zero_loop:                 ; выкидыш старших нулей
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
 
                 mov dl, [r11]
@@ -163,7 +189,7 @@ _parse_percent:
                 jne .hex_zero_loop
 
         .hex_print_loop:                ; печать буффера
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
 
                 mov dl, [r11]
@@ -176,14 +202,105 @@ _parse_percent:
 
                 jmp .back
 
+
+.octo:
+                mov rax, [r14]
+                add r14, 8
+
+                                        ; проверка минуса
+                mov r10d, eax
+                shr r10d, 31d
+                cmp r10d, 0
+                je .octo_plus
+                
+                mov r10d, eax
+                xor eax, eax
+                sub eax, r10d
+                mov [Symbol], '-'
+                call _print_symbol
+
+        .octo_plus:
+
+                mov r10, 11
+        .octo_clean_loop:                ; очистка буффера чисел
+                mov r11, 64 + Num_buffer
+                sub r11, r10
+                mov byte [r11], 0                
+
+                dec r10
+                cmp r10, 0
+                jne .octo_clean_loop
+
+
+                mov r10, 0
+        .octo_loop:                ; запись числа в буффер
+
+                mov rsi, 0x07
+                and sil, al
+
+
+                mov r11, 63 + Num_buffer
+                sub r11, r10
+                mov sil, byte [Numbers + rsi]       
+                mov byte [r11], sil   
+
+                shr eax, 3
+
+                inc r10
+                cmp r10, 11
+                jne .octo_loop
+
+
+
+                mov r10, 11
+        .octo_zero_loop:                 ; выкидыш старших нулей
+                mov r11, 64 + Num_buffer
+                sub r11, r10
+
+                mov dl, [r11]
+
+                cmp dl, '0'
+                jne .octo_print_loop
+
+                dec r10
+                cmp r10, 1
+                jne .octo_zero_loop
+
+        .octo_print_loop:                ; печать буффера
+                mov r11, 64 + Num_buffer
+                sub r11, r10
+
+                mov dl, [r11]
+                mov [Symbol], dl
+                call _print_symbol
+
+                dec r10
+                cmp r10, 0
+                jne .octo_print_loop
+
+                jmp .back
+
 .bin:
                 mov rax, [r14]
                 add r14, 8
 
+                                        ; проверка минуса
+                mov r10, rax
+                shr r10, 31d
+                cmp r10, 0
+                je .bin_plus
+                
+                mov r10, rax
+                xor rax, rax
+                sub rax, r10
+                mov [Symbol], '-'
+                call _print_symbol
 
-                mov r10, 64
+        .bin_plus:
+
+                mov r10, 32
         .bin_clean_loop:                ; очистка буффера чисел
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
                 mov byte [r11], 0                
 
@@ -199,7 +316,7 @@ _parse_percent:
                 and sil, al
 
 
-                mov r11, 63 + Buffer
+                mov r11, 63 + Num_buffer
                 sub r11, r10
                 mov sil, byte [Numbers + rsi]       
                 mov byte [r11], sil   
@@ -207,14 +324,14 @@ _parse_percent:
                 shr rax, 1
 
                 inc r10
-                cmp r10, 64
+                cmp r10, 32
                 jne .bin_loop
 
 
 
-                mov r10, 64
+                mov r10, 32
         .bin_zero_loop:                 ; выкидыш старших нулей
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
 
                 mov dl, [r11]
@@ -228,7 +345,7 @@ _parse_percent:
 
 
         .bin_print_loop:                ; печать буффера
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
 
                 mov dl, [r11]
@@ -245,10 +362,23 @@ _parse_percent:
                 mov rax, [r14]
                 add r14, 8
 
+                                        ; проверка минуса
+                mov r10d, eax
+                shr r10d, 31d
+                cmp r10d, 0
+                je .decimal_plus
+                
+                mov r10d, eax
+                xor eax, eax
+                sub eax, r10d
+                mov [Symbol], '-'
+                call _print_symbol
 
-                mov r10, 32
+        .decimal_plus:
+
+                mov r10, 8
         .dec_clean_loop:                ; очистка буффера чисел
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
                 mov byte [r11], 0                
 
@@ -260,24 +390,24 @@ _parse_percent:
                 mov r10, 0
         .dec_loop:                ; запись числа в буффер
 
-                mov rsi, 10
+                mov esi, 10
                 xor rdx, rdx
-                div rsi
+                div esi
 
-                mov r11, 63 + Buffer
+                mov r11, 63 + Num_buffer
                 sub r11, r10
                 mov sil, byte [Numbers + rdx]       
                 mov byte [r11], sil   
 
                 inc r10
-                cmp r10, 32
+                cmp r10, 8
                 jne .dec_loop
 
 
 
-                mov r10, 32
+                mov r10, 8
         .dec_zero_loop:                 ; выкидыш старших нулей
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
 
                 mov dl, [r11]
@@ -290,7 +420,7 @@ _parse_percent:
                 jne .dec_zero_loop
 
         .dec_print_loop:                ; печать буффера
-                mov r11, 64 + Buffer
+                mov r11, 64 + Num_buffer
                 sub r11, r10
 
                 mov dl, [r11]
@@ -319,13 +449,34 @@ _parse_percent:
                 mov rbx, rdx
                 call _strlen
                 mov rcx, rax
+                xor rdx, rdx
+                mov rax, BUFFER_SIZE
 
-                mov rax, 0x01           
+                cmp rcx, rax
+                jb .string_loop
+
+                call _print_buffer
+
+                mov rax, 0x01           ;syscall печати string
                 mov rdi, 1
-                mov rsi, rdx
+                mov rsi, rbx
                 mov rdx, rcx
                 syscall
 
+                jmp .string_loop_done
+
+.string_loop:
+                cmp rdx, rcx
+                je .string_loop_done
+
+                mov al, byte [rbx + rdx]
+                mov [Symbol], al
+                call _print_symbol
+
+                inc rdx
+                jmp .string_loop
+                
+.string_loop_done:
                 pop rdx
                 pop rsi
                 pop rdi
@@ -336,23 +487,15 @@ _parse_percent:
                 jmp .back
 
 .jump_table:
+                dq .back
                 dq .bin          
                 dq .char         
-                dq .decimal      
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .hex          
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
-                dq .back         
+                dq .decimal    
+                dq 3 dup(.back)               
+                dq .hex 
+                dq 6 dup(.back)                
+                dq .octo         
+                dq 3 dup(.back)       
                 dq .string   
 ; =======================================================================
 
@@ -365,17 +508,48 @@ _parse_percent:
 ; =======================================================================
 _print_symbol:
                 push rax     
+                push rbx
+
+                mov al, [Symbol]
+                mov rbx, [Print_buffer_count]
+                add rbx, Print_buffer
+
+                mov [rbx], al
+
+                mov bl, [Print_buffer_count]
+                inc bl
+                mov [Print_buffer_count], bl
+
+                cmp bl, BUFFER_SIZE
+                jne .done
+
+                call _print_buffer
+
+.done:
+                pop rbx
+                pop rax
+
+                ret
+; =======================================================================
+
+
+; =======================================================================
+; PRINT BUFFER IN ONE TIME
+; =======================================================================
+_print_buffer:
+                push rax     
                 push rdi
                 push rsi
                 push rdx
                 push rcx
 
-                mov rax, 0x01           ;syscall печати символа
+                mov rax, 0x01           ;syscall печати буффера
                 mov rdi, 1
-                mov rsi, Symbol
-                mov rdx, 1
+                mov rsi, Print_buffer
+                mov rdx, [Print_buffer_count]
                 syscall
 
+                mov byte [Print_buffer_count], 0
 
                 pop rcx
                 pop rdx
@@ -384,6 +558,7 @@ _print_symbol:
                 pop rax
 
                 ret
+
 ; =======================================================================
 
 
@@ -397,7 +572,7 @@ _strlen:
                 xor rax, rax
 .cycle:
                 mov cl, [rbx + rax]
-                cmp cl, 0x00
+                cmp cl, END_SYMBOL
                 je .done
 
                 inc rax
@@ -414,13 +589,12 @@ _strlen:
 
 section         .data
 
-
 Symbol          db '0'
 EndSymbol       db 0x0a
 Numbers         db '0123456789ABCDEF'
-Buffer          resb 64
+Print_buffer_count  db 0
 
-Argument        db "bebra", 0x00
-String1         db "Megaknight", 0x00
-String2         db "Clash royal", 0x00
+section         .bss
 
+Num_buffer          resb 64
+Print_buffer        resb BUFFER_SIZE
