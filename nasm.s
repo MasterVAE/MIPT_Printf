@@ -12,13 +12,14 @@ MINUS_SYMBOL equ '-'
 BUFFER_SIZE equ 64d
 
 FIRST_LETTER equ 'a'
-LAST_LETTER equ 's'
+LAST_LETTER equ 'x'
 
 ; =======================================================================
 ; Обертка для принта
 ; =======================================================================
 _my_printf:     
-                mov r15, rsp
+                mov [Return_adress], r13
+                pop r13
 
                 push r9
                 push r8
@@ -41,7 +42,8 @@ _my_printf:
                 pop rbx
 
 
-                mov rsp, r15
+                push r13
+                mov r13, [Return_adress]
                 ret
 ; =======================================================================
 
@@ -101,6 +103,10 @@ _parse_percent:
                 inc rcx
 
                 mov al, [rbx + rcx]
+
+                cmp al, '%'
+                je .percent
+
                 sub al, FIRST_LETTER 
 
                 cmp al, LAST_LETTER - FIRST_LETTER
@@ -108,6 +114,11 @@ _parse_percent:
 
                 movzx eax, al
                 jmp [.jump_table + REG_SIZE * rax]
+
+.percent:
+                mov [Symbol], '%'
+                call _print_symbol
+
 .back:
                 inc rcx
 
@@ -491,12 +502,12 @@ _parse_percent:
                 dq .bin          
                 dq .char         
                 dq .decimal    
-                dq 3 dup(.back)               
-                dq .hex 
-                dq 6 dup(.back)                
+                dq 10 dup(.back)                                
                 dq .octo         
                 dq 3 dup(.back)       
                 dq .string   
+                dq 4 dup(.back)
+                dq .hex
 ; =======================================================================
 
 
@@ -511,7 +522,8 @@ _print_symbol:
                 push rbx
 
                 mov al, [Symbol]
-                mov rbx, [Print_buffer_count]
+                xor rbx, rbx
+                mov bl, [Print_buffer_count]
                 add rbx, Print_buffer
 
                 mov [rbx], al
@@ -546,7 +558,8 @@ _print_buffer:
                 mov rax, 0x01           ;syscall печати буффера
                 mov rdi, 1
                 mov rsi, Print_buffer
-                mov rdx, [Print_buffer_count]
+                xor rdx, rdx
+                mov dl, [Print_buffer_count]
                 syscall
 
                 mov byte [Print_buffer_count], 0
@@ -593,8 +606,11 @@ Symbol          db '0'
 EndSymbol       db 0x0a
 Numbers         db '0123456789ABCDEF'
 Print_buffer_count  db 0
+Return_adress   db 8 dup(0)
 
 section         .bss
 
 Num_buffer          resb 64
 Print_buffer        resb BUFFER_SIZE
+
+
